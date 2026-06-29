@@ -216,4 +216,4 @@ MIT License — see [LICENSE](LICENSE).
 
 ## Author
 
-**Roman Sushkin** — [GitHub](https://github.com/Nikkilodeonee)
+**[Nikkilodeonee](https://github.com/Nikkilodeonee)**
