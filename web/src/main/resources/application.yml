@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: vulntrack
+  profiles:
+    default: local
+  jpa:
+    open-in-view: false
+
+vulntrack:
+  jwt:
+    secret: ${JWT_SECRET:change-me-vulntrack-local-dev-secret-key-32chars}
+    expiration-hours: 24
+  escalation:
+    cron: "0 0 * * * *"
+
+info:
+  app:
+    name: VulnTrack API
+    description: Vulnerability remediation workflow backend
+    java-version: '17'
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
