@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: vulntrack
+      POSTGRES_USER: vulntrack
+      POSTGRES_PASSWORD: vulntrack
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vulntrack -d vulntrack"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: vulntrack
+      DB_USERNAME: vulntrack
+      DB_PASSWORD: vulntrack
+      JWT_SECRET: change-me-vulntrack-docker-compose-secret-key
+    depends_on:
+      db:
+        condition: service_healthy
