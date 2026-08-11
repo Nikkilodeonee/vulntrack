@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vulntrack.enums.FindingStatus;
 import com.vulntrack.enums.RiskSeverity;
 import com.vulntrack.repository.FindingRepository;
-import com.vulntrack.service.VulnTrackService;
+import com.vulntrack.service.FindingWorkflowService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,7 +45,7 @@ class VulnTrackRestServiceTest {
     @Autowired
     private FindingRepository findingRepository;
     @Autowired
-    private VulnTrackService vulnTrackService;
+    private FindingWorkflowService findingWorkflowService;
 
     private MockMvc mockMvc;
 
@@ -249,7 +249,7 @@ class VulnTrackRestServiceTest {
         finding.setDueDate(LocalDate.now().minusDays(1));
         findingRepository.save(finding);
 
-        int escalated = vulnTrackService.escalateOverdueFindings();
+        int escalated = findingWorkflowService.escalateOverdueFindings();
         assertThat(escalated).isEqualTo(1);
 
         finding = findingRepository.findById(findingId).orElseThrow();
