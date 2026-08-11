@@ -1,9 +1,10 @@
 package com.vulntrack.controller;
 
+import com.vulntrack.dto.*;
 import com.vulntrack.enums.FindingStatus;
 import com.vulntrack.enums.RiskSeverity;
-import com.vulntrack.dto.*;
-import com.vulntrack.service.VulnTrackService;
+import com.vulntrack.service.FindingService;
+import com.vulntrack.service.FindingWorkflowService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,10 +17,12 @@ import java.util.List;
 @RequestMapping("/api/findings")
 public class FindingController {
 
-    private final VulnTrackService vulnTrackService;
+    private final FindingService findingService;
+    private final FindingWorkflowService findingWorkflowService;
 
-    public FindingController(VulnTrackService vulnTrackService) {
-        this.vulnTrackService = vulnTrackService;
+    public FindingController(FindingService findingService, FindingWorkflowService findingWorkflowService) {
+        this.findingService = findingService;
+        this.findingWorkflowService = findingWorkflowService;
     }
 
     @PostMapping
@@ -28,7 +31,7 @@ public class FindingController {
             @Valid @RequestBody CreateFindingRequest request,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        return vulnTrackService.createFinding(request, principal.getUsername());
+        return findingService.createFinding(request, principal.getUsername());
     }
 
     @GetMapping
@@ -36,12 +39,12 @@ public class FindingController {
             @RequestParam(required = false) RiskSeverity severity,
             @RequestParam(required = false) FindingStatus status
     ) {
-        return vulnTrackService.getFindings(severity, status);
+        return findingService.getFindings(severity, status);
     }
 
     @GetMapping("/{id}")
     public FindingResponse getFinding(@PathVariable long id) {
-        return vulnTrackService.getFinding(id);
+        return findingService.getFinding(id);
     }
 
     @PatchMapping("/{id}/confirm")
@@ -49,7 +52,7 @@ public class FindingController {
             @PathVariable long id,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        return vulnTrackService.confirmFinding(id, principal.getUsername());
+        return findingWorkflowService.confirmFinding(id, principal.getUsername());
     }
 
     @PatchMapping("/{id}/assign")
@@ -58,7 +61,7 @@ public class FindingController {
             @Valid @RequestBody AssignFindingRequest request,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        return vulnTrackService.assignFinding(id, request, principal.getUsername());
+        return findingWorkflowService.assignFinding(id, request, principal.getUsername());
     }
 
     @PatchMapping("/{id}/start-progress")
@@ -66,7 +69,7 @@ public class FindingController {
             @PathVariable long id,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        return vulnTrackService.startProgress(id, principal.getUsername());
+        return findingWorkflowService.startProgress(id, principal.getUsername());
     }
 
     @PatchMapping("/{id}/mark-patched")
@@ -74,7 +77,7 @@ public class FindingController {
             @PathVariable long id,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        return vulnTrackService.markPatched(id, principal.getUsername());
+        return findingWorkflowService.markPatched(id, principal.getUsername());
     }
 
     @PatchMapping("/{id}/verify")
@@ -82,7 +85,7 @@ public class FindingController {
             @PathVariable long id,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        return vulnTrackService.verifyFinding(id, principal.getUsername());
+        return findingWorkflowService.verifyFinding(id, principal.getUsername());
     }
 
     @PatchMapping("/{id}/close")
@@ -90,7 +93,7 @@ public class FindingController {
             @PathVariable long id,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        return vulnTrackService.closeFinding(id, principal.getUsername());
+        return findingWorkflowService.closeFinding(id, principal.getUsername());
     }
 
     @PatchMapping("/{id}/false-positive")
@@ -98,7 +101,7 @@ public class FindingController {
             @PathVariable long id,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        return vulnTrackService.markFalsePositive(id, principal.getUsername());
+        return findingWorkflowService.markFalsePositive(id, principal.getUsername());
     }
 
     @PatchMapping("/{id}/accept-risk")
@@ -107,12 +110,12 @@ public class FindingController {
             @Valid @RequestBody AcceptRiskRequest request,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        return vulnTrackService.acceptRisk(id, request, principal.getUsername());
+        return findingWorkflowService.acceptRisk(id, request, principal.getUsername());
     }
 
     @GetMapping("/{id}/history")
     public List<FindingHistoryResponse> getHistory(@PathVariable long id) {
-        return vulnTrackService.getFindingHistory(id);
+        return findingService.getFindingHistory(id);
     }
 
     @PostMapping("/{id}/comments")
@@ -122,11 +125,11 @@ public class FindingController {
             @Valid @RequestBody CreateCommentRequest request,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        return vulnTrackService.addComment(id, request, principal.getUsername());
+        return findingService.addComment(id, request, principal.getUsername());
     }
 
     @GetMapping("/{id}/comments")
     public List<CommentResponse> getComments(@PathVariable long id) {
-        return vulnTrackService.getComments(id);
+        return findingService.getComments(id);
     }
 }

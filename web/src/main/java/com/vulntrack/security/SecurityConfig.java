@@ -45,7 +45,7 @@ public class SecurityConfig {
                         )
                         .requestMatchers(HttpMethod.POST, "/api/findings/*/comments").authenticated()
                         .requestMatchers("/api/**").authenticated()
-                        .anyRequest().permitAll()
+                        .anyRequest().denyAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

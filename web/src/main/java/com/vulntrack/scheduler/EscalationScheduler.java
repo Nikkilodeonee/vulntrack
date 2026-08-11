@@ -1,6 +1,6 @@
 package com.vulntrack.scheduler;
 
-import com.vulntrack.service.VulnTrackService;
+import com.vulntrack.service.FindingWorkflowService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,15 +13,15 @@ public class EscalationScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(EscalationScheduler.class);
 
-    private final VulnTrackService vulnTrackService;
+    private final FindingWorkflowService findingWorkflowService;
 
-    public EscalationScheduler(VulnTrackService vulnTrackService) {
-        this.vulnTrackService = vulnTrackService;
+    public EscalationScheduler(FindingWorkflowService findingWorkflowService) {
+        this.findingWorkflowService = findingWorkflowService;
     }
 
     @Scheduled(cron = "${vulntrack.escalation.cron:0 0 * * * *}")
     public void escalateOverdueFindings() {
-        int escalated = vulnTrackService.escalateOverdueFindings();
+        int escalated = findingWorkflowService.escalateOverdueFindings();
         if (escalated > 0) {
             log.info("Escalated {} overdue findings.", escalated);
         }

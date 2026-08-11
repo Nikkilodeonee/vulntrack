@@ -25,13 +25,26 @@ Personal portfolio project — domain inspired by how AppSec teams triage scan r
 |--------|----------------|
 | `api` | Shared DTOs and domain enums |
 | `persistence` | JPA entities and repositories |
-| `service` | Business rules, risk scoring, workflow |
+| `service` | Domain-oriented application services |
 | `web` | REST controllers, JWT security, Flyway, scheduler |
 
+Application services in `service`:
+
+| Service | Responsibility |
+|---------|----------------|
+| `AssetService` | Asset create/list |
+| `ScanService` | Scan registration |
+| `FindingService` | Finding create/query, comments, history |
+| `FindingWorkflowService` | Remediation transitions + SLA escalation |
+| `DashboardService` | Risk summary aggregations |
+| `AuthService` / `JwtTokenService` | Login and JWT |
+| `RiskScoringService` | CVSS × criticality scoring |
+
 ```
-Client → Web (JWT) → Service → Persistence → PostgreSQL
-                              ↘ Scheduler (SLA escalation)
-Flyway ─────────────────────────────────────→ PostgreSQL
+Client → Controller → FindingWorkflowService → Repositories + FindingHistoryWriter
+                   ↘ FindingService / AssetService / ScanService / DashboardService
+Scheduler ─────────→ FindingWorkflowService (SLA escalation)
+Flyway ────────────────────────────────────────────────→ PostgreSQL
 ```
 
 ## Finding workflow
