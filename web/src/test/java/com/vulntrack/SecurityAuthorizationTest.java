@@ -153,6 +153,15 @@ class SecurityAuthorizationTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    @DisplayName("Swagger UI is closed when OpenAPI is disabled")
+    void swaggerIsNotPublicWhenDisabled() throws Exception {
+        mockMvc.perform(get("/swagger-ui.html"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private String login(String username, String password) throws Exception {
         String response = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

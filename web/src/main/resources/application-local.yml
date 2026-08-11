@@ -14,3 +14,10 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+# Open only for local demo (Docker Compose / local profile). Disabled by default.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

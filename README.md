@@ -17,7 +17,7 @@ Personal portfolio project — domain inspired by how AppSec teams triage scan r
 - **Docker Compose** local environment
 - **GitHub Actions** CI
 - **MockMvc** and **Testcontainers** tests
-- **OpenAPI / Swagger UI** documentation
+- **OpenAPI / Swagger UI** documentation (enabled only on the `local` profile)
 
 ## Architecture
 
@@ -107,7 +107,7 @@ All `/api/**` endpoints require `Authorization: Bearer <token>` except login.
 | GET | `/api/findings/{id}/history` | Audit trail |
 | POST | `/api/findings/{id}/comments` | Add comment |
 | GET | `/api/dashboard/risk-summary` | Dashboard metrics |
-| GET | `/swagger-ui.html` | Swagger UI |
+| GET | `/swagger-ui.html` | Swagger UI (local profile only) |
 | GET | `/actuator/health` | Health check |
 
 ## Error responses
