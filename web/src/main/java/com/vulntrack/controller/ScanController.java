@@ -2,7 +2,7 @@ package com.vulntrack.controller;
 
 import com.vulntrack.dto.CreateScanRequest;
 import com.vulntrack.dto.ScanResponse;
-import com.vulntrack.service.VulnTrackService;
+import com.vulntrack.service.ScanService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,15 +15,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/scans")
 public class ScanController {
 
-    private final VulnTrackService vulnTrackService;
+    private final ScanService scanService;
 
-    public ScanController(VulnTrackService vulnTrackService) {
-        this.vulnTrackService = vulnTrackService;
+    public ScanController(ScanService scanService) {
+        this.scanService = scanService;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ScanResponse createScan(@Valid @RequestBody CreateScanRequest request) {
-        return vulnTrackService.createScan(request);
+        return scanService.createScan(request);
     }
 }
