@@ -2,7 +2,7 @@ package com.vulntrack.controller;
 
 import com.vulntrack.dto.AssetResponse;
 import com.vulntrack.dto.CreateAssetRequest;
-import com.vulntrack.service.VulnTrackService;
+import com.vulntrack.service.AssetService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,20 +18,20 @@ import java.util.List;
 @RequestMapping("/api/assets")
 public class AssetController {
 
-    private final VulnTrackService vulnTrackService;
+    private final AssetService assetService;
 
-    public AssetController(VulnTrackService vulnTrackService) {
-        this.vulnTrackService = vulnTrackService;
+    public AssetController(AssetService assetService) {
+        this.assetService = assetService;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public AssetResponse createAsset(@Valid @RequestBody CreateAssetRequest request) {
-        return vulnTrackService.createAsset(request);
+        return assetService.createAsset(request);
     }
 
     @GetMapping
     public List<AssetResponse> getAssets() {
-        return vulnTrackService.getAssets();
+        return assetService.getAssets();
     }
 }
