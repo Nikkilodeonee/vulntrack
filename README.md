@@ -1,6 +1,6 @@
 # VulnTrack — Vulnerability Remediation API
 
-[![Build and Test](https://github.com/roman-sushkin/vulntrack/actions/workflows/build.yml/badge.svg)](https://github.com/roman-sushkin/vulntrack/actions/workflows/build.yml)
+[![Build and Test](https://github.com/Nikkilodeonee/vulntrack/actions/workflows/build.yml/badge.svg)](https://github.com/Nikkilodeon/vulntrack/actions/workflows/build.yml)
 
 **VulnTrack** is a Spring Boot backend for managing security vulnerabilities across company assets. It supports asset inventory, scan imports, CVSS-based risk scoring, remediation workflows, role-based access control, audit history, accepted-risk handling, SLA deadlines, and automated escalation.
 
