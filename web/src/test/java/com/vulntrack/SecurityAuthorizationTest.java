@@ -1,5 +1,7 @@
 package com.vulntrack;
 
+import com.vulntrack.domain.User;
+import com.vulntrack.repository.UserRepository;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +40,9 @@ class SecurityAuthorizationTest {
 
     @Autowired
     private WebApplicationContext context;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Value("${vulntrack.jwt.secret}")
     private String jwtSecret;
@@ -159,6 +164,24 @@ class SecurityAuthorizationTest {
         mockMvc.perform(get("/swagger-ui.html"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Previously issued JWT is rejected after the account is disabled")
+    void disabledUserJwtIsRejected() throws Exception {
+        String token = login("viewer", "ViewerSecret123");
+
+        mockMvc.perform(get("/api/findings")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        User viewer = userRepository.findByUsername("viewer").orElseThrow();
+        viewer.setEnabled(false);
+        userRepository.save(viewer);
+
+        mockMvc.perform(get("/api/findings")
+                        .header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
     }
 
