@@ -27,6 +27,7 @@ public record FindingResponse(
         LocalDateTime escalatedAt,
         Long duplicateOfId,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        Long version
 ) {
 }
