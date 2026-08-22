@@ -13,6 +13,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,19 +33,22 @@ public class FindingWorkflowService {
     private final RiskScoringService riskScoringService;
     private final FindingHistoryWriter historyWriter;
     private final FindingService findingService;
+    private final Clock clock;
 
     public FindingWorkflowService(
             FindingRepository findingRepository,
             AuthService authService,
             RiskScoringService riskScoringService,
             FindingHistoryWriter historyWriter,
-            FindingService findingService
+            FindingService findingService,
+            Clock clock
     ) {
         this.findingRepository = findingRepository;
         this.authService = authService;
         this.riskScoringService = riskScoringService;
         this.historyWriter = historyWriter;
         this.findingService = findingService;
+        this.clock = clock;
     }
 
     @Transactional
@@ -133,7 +137,7 @@ public class FindingWorkflowService {
         Finding finding = findingService.requireFinding(id);
         assertStatus(finding, FindingStatus.CONFIRMED, "Only CONFIRMED findings can be accepted as risk.");
 
-        if (request.expiresAt().isBefore(LocalDate.now().plusDays(1))) {
+        if (request.expiresAt().isBefore(LocalDate.now(clock).plusDays(1))) {
             throw new IllegalArgumentException("Accepted risk expiration must be at least one day in the future.");
         }
 
@@ -145,10 +149,10 @@ public class FindingWorkflowService {
 
     @Transactional
     public int escalateOverdueFindings() {
-        List<Finding> overdueFindings = findingRepository.findOverdueNotEscalated(LocalDate.now(), TERMINAL_STATUSES);
+        List<Finding> overdueFindings = findingRepository.findOverdueNotEscalated(LocalDate.now(clock), TERMINAL_STATUSES);
         for (Finding finding : overdueFindings) {
             finding.setEscalated(true);
-            finding.setEscalatedAt(LocalDateTime.now());
+            finding.setEscalatedAt(LocalDateTime.now(clock));
             findingRepository.save(finding);
             historyWriter.record(
                     finding,
@@ -169,13 +173,13 @@ public class FindingWorkflowService {
         RiskSeverity severity = riskScoringService.determineSeverity(riskScore);
         finding.setRiskScore(riskScore);
         finding.setSeverity(severity);
-        finding.setDueDate(riskScoringService.calculateDueDate(severity, LocalDate.now()));
+        finding.setDueDate(riskScoringService.calculateDueDate(severity, LocalDate.now(clock)));
     }
 
     private void transition(Finding finding, FindingStatus toStatus, User actor, String note) {
         FindingStatus fromStatus = finding.getStatus();
         finding.setStatus(toStatus);
-        findingRepository.save(finding);
+        findingRepository.saveAndFlush(finding);
         historyWriter.record(finding, fromStatus, toStatus, actor, note);
     }
 

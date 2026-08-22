@@ -7,6 +7,7 @@ import com.vulntrack.repository.FindingRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,9 +24,11 @@ public class DashboardService {
     );
 
     private final FindingRepository findingRepository;
+    private final Clock clock;
 
-    public DashboardService(FindingRepository findingRepository) {
+    public DashboardService(FindingRepository findingRepository, Clock clock) {
         this.findingRepository = findingRepository;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -40,7 +43,7 @@ public class DashboardService {
             byStatus.put(status.name(), findingRepository.countByStatus(status));
         }
 
-        long overdueCount = findingRepository.findOverdueNotEscalated(LocalDate.now(), TERMINAL_STATUSES).size();
+        long overdueCount = findingRepository.findOverdueNotEscalated(LocalDate.now(clock), TERMINAL_STATUSES).size();
         long escalatedCount = findingRepository.countByEscalatedTrue();
 
         return new RiskSummaryResponse(bySeverity, byStatus, overdueCount, escalatedCount);

@@ -22,7 +22,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,6 +50,8 @@ class FindingWorkflowServiceTest {
     private FindingService findingService;
 
     private final RiskScoringService riskScoringService = new RiskScoringService();
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-28T12:00:00Z"), ZoneOffset.UTC);
+    private final LocalDate today = LocalDate.of(2026, 6, 28);
 
     private FindingWorkflowService workflowService;
 
@@ -57,7 +62,8 @@ class FindingWorkflowServiceTest {
                 authService,
                 riskScoringService,
                 historyWriter,
-                findingService
+                findingService,
+                clock
         );
     }
 
@@ -78,8 +84,8 @@ class FindingWorkflowServiceTest {
         assertThat(finding.getStatus()).isEqualTo(FindingStatus.CONFIRMED);
         assertThat(finding.getRiskScore()).isEqualByComparingTo("19.60");
         assertThat(finding.getSeverity()).isEqualTo(RiskSeverity.CRITICAL);
-        assertThat(finding.getDueDate()).isEqualTo(LocalDate.now().plusDays(7));
-        verify(findingRepository).save(finding);
+        assertThat(finding.getDueDate()).isEqualTo(today.plusDays(7));
+        verify(findingRepository).saveAndFlush(finding);
         verify(historyWriter).record(
                 eq(finding),
                 eq(FindingStatus.DETECTED),
@@ -190,7 +196,7 @@ class FindingWorkflowServiceTest {
         when(authService.requireUser("analyst")).thenReturn(analyst);
         when(findingService.requireFinding(4L)).thenReturn(finding);
 
-        AcceptRiskRequest request = new AcceptRiskRequest("Business accepted", LocalDate.now());
+        AcceptRiskRequest request = new AcceptRiskRequest("Business accepted", today);
 
         assertThatThrownBy(() -> workflowService.acceptRisk(4L, request, "analyst"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -229,9 +235,9 @@ class FindingWorkflowServiceTest {
     void escalateOverdueFindings() {
         Finding overdue = detectedFinding(6L, BigDecimal.valueOf(9.0), AssetCriticality.CRITICAL);
         overdue.setStatus(FindingStatus.ASSIGNED);
-        overdue.setDueDate(LocalDate.now().minusDays(1));
+        overdue.setDueDate(today.minusDays(1));
 
-        when(findingRepository.findOverdueNotEscalated(eq(LocalDate.now()), any()))
+        when(findingRepository.findOverdueNotEscalated(eq(today), any()))
                 .thenReturn(List.of(overdue));
 
         int count = workflowService.escalateOverdueFindings();
@@ -251,6 +257,84 @@ class FindingWorkflowServiceTest {
         );
         assertThat(noteCaptor.getValue()).contains("missed SLA");
         verify(findingRepository).save(overdue);
+    }
+
+    @Test
+    @DisplayName("Accept risk allows expiration exactly one day ahead of the business clock")
+    void acceptRiskAllowsTomorrowExpiration() {
+        User analyst = user(10L, "analyst", UserRole.SECURITY_ANALYST);
+        Finding finding = detectedFinding(4L, BigDecimal.valueOf(4.0), AssetCriticality.LOW);
+        finding.setStatus(FindingStatus.CONFIRMED);
+        FindingResponse response = stubResponse(finding);
+
+        when(authService.requireUser("analyst")).thenReturn(analyst);
+        when(findingService.requireFinding(4L)).thenReturn(finding);
+        when(findingService.toFindingResponse(finding)).thenReturn(response);
+
+        workflowService.acceptRisk(4L, new AcceptRiskRequest("Accepted", today.plusDays(1)), "analyst");
+
+        assertThat(finding.getStatus()).isEqualTo(FindingStatus.ACCEPTED_RISK);
+        assertThat(finding.getAcceptedRiskExpiresAt()).isEqualTo(today.plusDays(1));
+    }
+
+    @Test
+    @DisplayName("Accept risk rejects an expiration in the past")
+    void acceptRiskRejectsPastExpiration() {
+        User analyst = user(10L, "analyst", UserRole.SECURITY_ANALYST);
+        Finding finding = detectedFinding(4L, BigDecimal.valueOf(4.0), AssetCriticality.LOW);
+        finding.setStatus(FindingStatus.CONFIRMED);
+
+        when(authService.requireUser("analyst")).thenReturn(analyst);
+        when(findingService.requireFinding(4L)).thenReturn(finding);
+
+        assertThatThrownBy(() -> workflowService.acceptRisk(
+                4L, new AcceptRiskRequest("Accepted", today.minusDays(1)), "analyst"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("at least one day in the future");
+    }
+
+    @Test
+    @DisplayName("Findings due today are not treated as overdue")
+    void dueTodayIsNotEscalated() {
+        when(findingRepository.findOverdueNotEscalated(eq(today), any())).thenReturn(List.of());
+
+        int count = workflowService.escalateOverdueFindings();
+
+        assertThat(count).isZero();
+        verify(findingRepository, never()).save(any());
+        verify(historyWriter, never()).record(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Already escalated findings are not escalated again")
+    void alreadyEscalatedFindingsAreSkipped() {
+        when(findingRepository.findOverdueNotEscalated(eq(today), any())).thenReturn(List.of());
+
+        assertThat(workflowService.escalateOverdueFindings()).isZero();
+        verify(historyWriter, never()).record(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Terminal findings are excluded from SLA escalation")
+    void terminalFindingsAreNotEscalated() {
+        when(findingRepository.findOverdueNotEscalated(eq(today), any())).thenReturn(List.of());
+
+        assertThat(workflowService.escalateOverdueFindings()).isZero();
+        verify(findingRepository).findOverdueNotEscalated(eq(today), eq(List.of(
+                FindingStatus.CLOSED,
+                FindingStatus.FALSE_POSITIVE,
+                FindingStatus.ACCEPTED_RISK,
+                FindingStatus.DUPLICATE
+        )));
+    }
+
+    @Test
+    @DisplayName("Findings due in the future are not escalated")
+    void futureDueDateIsNotEscalated() {
+        when(findingRepository.findOverdueNotEscalated(eq(today), any())).thenReturn(List.of());
+
+        assertThat(workflowService.escalateOverdueFindings()).isZero();
+        verify(findingRepository, never()).save(any());
     }
 
     private static User user(long id, String username, UserRole role) {
@@ -288,7 +372,8 @@ class FindingWorkflowServiceTest {
                 finding.getEscalatedAt(),
                 null,
                 finding.getCreatedAt(),
-                finding.getUpdatedAt()
+                finding.getUpdatedAt(),
+                finding.getVersion()
         );
     }
 }

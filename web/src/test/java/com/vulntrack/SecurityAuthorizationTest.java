@@ -73,6 +73,32 @@ class SecurityAuthorizationTest {
     }
 
     @Test
+    @DisplayName("JWT signed with a different key returns 401")
+    void jwtWithInvalidSignatureReturnsUnauthorized() throws Exception {
+        SecretKey wrongKey = Keys.hmacShaKeyFor("another-secret-key-for-vulntrack-tests!!".getBytes(StandardCharsets.UTF_8));
+        Instant now = Instant.now();
+        String token = Jwts.builder()
+                .subject("viewer")
+                .claim("role", "VIEWER")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plus(1, ChronoUnit.HOURS)))
+                .signWith(wrongKey)
+                .compact();
+
+        mockMvc.perform(get("/api/findings")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Malformed JWT returns 401")
+    void malformedJwtReturnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/findings")
+                        .header("Authorization", "Bearer not.a.jwt"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @DisplayName("Expired JWT returns 401")
     void expiredJwtReturnsUnauthorized() throws Exception {
         String expired = expiredToken("viewer");
