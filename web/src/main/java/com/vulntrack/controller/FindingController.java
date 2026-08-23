@@ -6,6 +6,9 @@ import com.vulntrack.enums.RiskSeverity;
 import com.vulntrack.service.FindingService;
 import com.vulntrack.service.FindingWorkflowService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -35,11 +38,13 @@ public class FindingController {
     }
 
     @GetMapping
-    public List<FindingResponse> getFindings(
+    public PageResponse<FindingResponse> getFindings(
             @RequestParam(required = false) RiskSeverity severity,
-            @RequestParam(required = false) FindingStatus status
+            @RequestParam(required = false) FindingStatus status,
+            @PageableDefault(size = FindingService.DEFAULT_PAGE_SIZE, sort = "id", direction = Sort.Direction.ASC)
+            Pageable pageable
     ) {
-        return findingService.getFindings(severity, status);
+        return findingService.getFindings(severity, status, pageable);
     }
 
     @GetMapping("/{id}")

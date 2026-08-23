@@ -7,6 +7,7 @@ import com.vulntrack.domain.FindingHistory;
 import com.vulntrack.domain.Scan;
 import com.vulntrack.domain.User;
 import com.vulntrack.dto.CommentResponse;
+import com.vulntrack.dto.PageResponse;
 import com.vulntrack.dto.CreateCommentRequest;
 import com.vulntrack.dto.CreateFindingRequest;
 import com.vulntrack.dto.FindingHistoryResponse;
@@ -18,17 +19,29 @@ import com.vulntrack.repository.CommentRepository;
 import com.vulntrack.repository.FindingHistoryRepository;
 import com.vulntrack.repository.FindingRepository;
 import com.vulntrack.repository.ScanRepository;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
 @Service
 public class FindingService {
+
+    public static final int DEFAULT_PAGE_SIZE = 20;
+    public static final int MAX_PAGE_SIZE = 100;
+    private static final Set<String> ALLOWED_SORT_PROPERTIES = Set.of(
+            "id", "dueDate", "createdAt", "updatedAt", "severity", "status", "cvssScore", "riskScore", "cveId", "title"
+    );
 
     private final AssetRepository assetRepository;
     private final ScanRepository scanRepository;
@@ -98,14 +111,38 @@ public class FindingService {
             return toFindingResponse(finding);
         }
 
-        finding = findingRepository.save(finding);
+        try {
+            finding = findingRepository.saveAndFlush(finding);
+        } catch (DataIntegrityViolationException exception) {
+            // The transaction is now rollback-only; convert the race into a 409 rather than a SQL error.
+            throw new ResourceConflictException("A finding for this asset and CVE already exists.");
+        }
         historyWriter.record(finding, null, FindingStatus.DETECTED, actor, "Finding imported from scan results.");
         return toFindingResponse(finding);
     }
 
     @Transactional(readOnly = true)
-    public List<FindingResponse> getFindings(RiskSeverity severity, FindingStatus status) {
+    public PageResponse<FindingResponse> getFindings(RiskSeverity severity, FindingStatus status, Pageable pageable) {
+        if (pageable.getPageSize() > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("Page size must not exceed " + MAX_PAGE_SIZE + ".");
+        }
+        if (pageable.getPageNumber() < 0) {
+            throw new IllegalArgumentException("Page index must not be negative.");
+        }
+        pageable.getSort().forEach(order -> {
+            if (!ALLOWED_SORT_PROPERTIES.contains(order.getProperty())) {
+                throw new IllegalArgumentException("Unknown sort property: " + order.getProperty());
+            }
+        });
+
         Specification<Finding> spec = (root, query, cb) -> {
+            if (query.getResultType() != Long.class && query.getResultType() != long.class) {
+                root.fetch("asset", JoinType.INNER);
+                root.fetch("scan", JoinType.LEFT);
+                root.fetch("assignedEngineer", JoinType.LEFT);
+                root.fetch("duplicateOf", JoinType.LEFT);
+                query.distinct(true);
+            }
             List<Predicate> predicates = new ArrayList<>();
             if (severity != null) {
                 predicates.add(cb.equal(root.get("severity"), severity));
@@ -116,7 +153,20 @@ public class FindingService {
             return cb.and(predicates.toArray(Predicate[]::new));
         };
 
-        return findingRepository.findAll(spec).stream().map(this::toFindingResponse).toList();
+        try {
+            Page<Finding> page = findingRepository.findAll(spec, pageable);
+            return new PageResponse<>(
+                    page.getContent().stream().map(this::toFindingResponse).toList(),
+                    page.getNumber(),
+                    page.getSize(),
+                    page.getTotalElements(),
+                    page.getTotalPages(),
+                    page.isFirst(),
+                    page.isLast()
+            );
+        } catch (PropertyReferenceException exception) {
+            throw new IllegalArgumentException("Unknown sort property: " + exception.getPropertyName());
+        }
     }
 
     @Transactional(readOnly = true)
@@ -174,7 +224,8 @@ public class FindingService {
                 finding.getEscalatedAt(),
                 finding.getDuplicateOf() != null ? finding.getDuplicateOf().getId() : null,
                 finding.getCreatedAt(),
-                finding.getUpdatedAt()
+                finding.getUpdatedAt(),
+                finding.getVersion()
         );
     }
 

@@ -2,9 +2,8 @@ package com.vulntrack;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.vulntrack.enums.FindingStatus;
-import com.vulntrack.enums.RiskSeverity;
 import com.vulntrack.repository.FindingRepository;
+import com.vulntrack.service.FindingService;
 import com.vulntrack.service.FindingWorkflowService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
-import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,6 +45,8 @@ class VulnTrackRestServiceTest {
     private FindingRepository findingRepository;
     @Autowired
     private FindingWorkflowService findingWorkflowService;
+    @Autowired
+    private Clock clock;
 
     private MockMvc mockMvc;
 
@@ -246,7 +247,13 @@ class VulnTrackRestServiceTest {
                 .andExpect(status().isOk());
 
         var finding = findingRepository.findById(findingId).orElseThrow();
-        finding.setDueDate(LocalDate.now().minusDays(1));
+        finding.setDueDate(LocalDate.now(clock));
+        findingRepository.save(finding);
+
+        assertThat(findingWorkflowService.escalateOverdueFindings()).isZero();
+
+        finding = findingRepository.findById(findingId).orElseThrow();
+        finding.setDueDate(LocalDate.now(clock).minusDays(1));
         findingRepository.save(finding);
 
         int escalated = findingWorkflowService.escalateOverdueFindings();
@@ -266,6 +273,133 @@ class VulnTrackRestServiceTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.bySeverity").exists())
                 .andExpect(jsonPath("$.byStatus").exists());
+    }
+
+    @Test
+    @DisplayName("Findings collection is paginated with a default page size")
+    void findingsArePaginated() throws Exception {
+        String token = login("analyst", "AnalystSecret123");
+        for (int i = 1; i <= 3; i++) {
+            mockMvc.perform(post("/api/findings")
+                            .header("Authorization", bearer(token))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "assetId": 1,
+                                      "cveId": "CVE-2024-PAGE-%d",
+                                      "title": "Pagination finding %d",
+                                      "cvssScore": 4.0
+                                    }
+                                    """.formatted(i, i)))
+                    .andExpect(status().isCreated());
+        }
+
+        mockMvc.perform(get("/api/findings")
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(3))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(FindingService.DEFAULT_PAGE_SIZE))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(true));
+
+        mockMvc.perform(get("/api/findings")
+                        .header("Authorization", bearer(token))
+                        .param("page", "0")
+                        .param("size", "2")
+                        .param("sort", "cveId,asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.content[0].cveId").value("CVE-2024-PAGE-1"));
+
+        mockMvc.perform(get("/api/findings")
+                        .header("Authorization", bearer(token))
+                        .param("page", "1")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.last").value(true));
+
+        mockMvc.perform(get("/api/findings")
+                        .header("Authorization", bearer(token))
+                        .param("status", "DETECTED")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.content[0].status").value("DETECTED"));
+
+        mockMvc.perform(get("/api/findings")
+                        .header("Authorization", bearer(token))
+                        .param("size", String.valueOf(FindingService.MAX_PAGE_SIZE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(FindingService.MAX_PAGE_SIZE));
+
+        mockMvc.perform(get("/api/findings")
+                        .header("Authorization", bearer(token))
+                        .param("size", String.valueOf(FindingService.MAX_PAGE_SIZE + 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("BAD_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("Accept risk rejects missing reason and non-future expiry")
+    void acceptRiskValidatesReasonAndExpiry() throws Exception {
+        String token = login("analyst", "AnalystSecret123");
+        long findingId = createDetectedFinding(token, "CVE-2024-ACCEPT");
+
+        mockMvc.perform(patch("/api/findings/" + findingId + "/confirm")
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(patch("/api/findings/" + findingId + "/accept-risk")
+                        .header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"","expiresAt":"%s"}
+                                """.formatted(LocalDate.now(clock).plusDays(2))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(patch("/api/findings/" + findingId + "/accept-risk")
+                        .header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"Accepted"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(patch("/api/findings/" + findingId + "/accept-risk")
+                        .header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"Accepted","expiresAt":"%s"}
+                                """.formatted(LocalDate.now(clock))))
+                .andExpect(status().isBadRequest());
+    }
+
+    private long createDetectedFinding(String token, String cveId) throws Exception {
+        String response = mockMvc.perform(post("/api/findings")
+                        .header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "assetId": 1,
+                                  "cveId": "%s",
+                                  "title": "Accept risk validation",
+                                  "cvssScore": 4.0
+                                }
+                                """.formatted(cveId)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readTree(response).get("id").asLong();
     }
 
     private String login(String username, String password) throws Exception {

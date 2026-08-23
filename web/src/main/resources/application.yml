@@ -1,3 +1,6 @@
+server:
+  port: ${PORT:8080}
+
 spring:
   application:
     name: vulntrack
@@ -5,6 +8,12 @@ spring:
     default: local
   jpa:
     open-in-view: false
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        # Keep Spring's clamp above the API maximum so oversized requests are rejected, not silently reduced.
+        max-page-size: 2000
 
 vulntrack:
   jwt:
