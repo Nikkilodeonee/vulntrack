@@ -5,16 +5,8 @@ import com.vulntrack.enums.FindingStatus;
 import com.vulntrack.repository.FindingRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -22,26 +14,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@Testcontainers(disabledWithoutDocker = true)
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("local")
-class VulnTrackPostgresIntegrationTest {
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("vulntrack")
-            .withUsername("vulntrack")
-            .withPassword("vulntrack");
-
-    @DynamicPropertySource
-    static void registerProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("vulntrack.jwt.secret", () -> "postgres-integration-test-jwt-secret-key");
-        registry.add("vulntrack.escalation.enabled", () -> "false");
-    }
+class VulnTrackPostgresIT extends AbstractPostgresIT {
 
     @Autowired
     private MockMvc mockMvc;
@@ -77,6 +50,7 @@ class VulnTrackPostgresIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.version").isNumber())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -87,10 +61,12 @@ class VulnTrackPostgresIntegrationTest {
                         .header("Authorization", "Bearer " + jwt))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
-                .andExpect(jsonPath("$.severity").value("CRITICAL"));
+                .andExpect(jsonPath("$.severity").value("CRITICAL"))
+                .andExpect(jsonPath("$.version").value(1));
 
         var finding = findingRepository.findById(findingId).orElseThrow();
         assertThat(finding.getStatus()).isEqualTo(FindingStatus.CONFIRMED);
         assertThat(finding.getRiskScore()).isNotNull();
+        assertThat(finding.getVersion()).isEqualTo(1L);
     }
 }

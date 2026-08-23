@@ -19,5 +19,8 @@ jobs:
           java-version: '17'
           cache: maven
 
+      - name: Check Docker
+        run: docker info
+
       - name: Run tests
         run: ./mvnw verify
