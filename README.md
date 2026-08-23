@@ -17,7 +17,36 @@ Personal portfolio project — domain inspired by how AppSec teams triage scan r
 - **Docker Compose** local environment
 - **GitHub Actions** CI
 - **MockMvc** and **Testcontainers** tests
-- **OpenAPI / Swagger UI** documentation (enabled only on the `local` profile)
+- **OpenAPI / Swagger UI** documentation (enabled on the `local` and `demo` profiles)
+
+## Live demo
+
+Public Swagger UI is the demo entrypoint (profile `demo` — not the local Docker secrets).
+
+**URL:** add this after the host has been up for a couple of days, pointing at `/swagger-ui.html`.
+
+Until then, local:
+
+```bash
+docker compose up --build
+```
+
+http://localhost:8081/swagger-ui.html — `/` redirects there when Swagger is enabled.
+
+### Deploy (Railway)
+
+1. New project → deploy from `Nikkilodeonee/vulntrack` (Dockerfile).
+2. Add PostgreSQL. Railway sets `DATABASE_URL`; the app maps it to JDBC.
+3. Variables:
+
+| Variable | Value |
+|----------|--------|
+| `SPRING_PROFILES_ACTIVE` | `demo` |
+| `JWT_SECRET` | random string, **at least 32 characters** (not the Compose default) |
+
+Health check: `/actuator/health`. Root `/` opens Swagger.
+
+Demo logins stay as in [Demo accounts](#demo-accounts). This is a portfolio instance, not production.
 
 ## Architecture
 
@@ -95,7 +124,7 @@ All `/api/**` endpoints require `Authorization: Bearer <token>` except login.
 | GET | `/api/assets` | List assets |
 | POST | `/api/scans` | Register scan |
 | POST | `/api/findings` | Import finding |
-| GET | `/api/findings` | List findings (filter by severity/status) |
+| GET | `/api/findings` | List findings (paginated; filter by severity/status) |
 | PATCH | `/api/findings/{id}/confirm` | Confirm finding |
 | PATCH | `/api/findings/{id}/assign` | Assign engineer |
 | PATCH | `/api/findings/{id}/start-progress` | Start remediation |
@@ -107,7 +136,7 @@ All `/api/**` endpoints require `Authorization: Bearer <token>` except login.
 | GET | `/api/findings/{id}/history` | Audit trail |
 | POST | `/api/findings/{id}/comments` | Add comment |
 | GET | `/api/dashboard/risk-summary` | Dashboard metrics |
-| GET | `/swagger-ui.html` | Swagger UI (local profile only) |
+| GET | `/swagger-ui.html` | Swagger UI (`local` and `demo` profiles) |
 | GET | `/actuator/health` | Health check |
 
 ## Error responses
@@ -121,10 +150,11 @@ All `/api/**` endpoints require `Authorization: Bearer <token>` except login.
 
 | Status | Error | When |
 |--------|-------|------|
-| 400 | `BAD_REQUEST` | Validation failure or invalid workflow transition |
+| 400 | `BAD_REQUEST` | Validation failure, invalid workflow transition, or page size above 100 |
 | 401 | `UNAUTHORIZED` | Missing or invalid JWT |
 | 403 | `FORBIDDEN` | Role not allowed for action |
 | 404 | `NOT_FOUND` | Resource not found |
+| 409 | `CONFLICT` | Stale finding update (optimistic lock) or concurrent canonical import for the same asset + CVE |
 
 ## Getting started
 
@@ -174,8 +204,45 @@ API: http://localhost:8080/swagger-ui.html
 ./mvnw verify
 ```
 
-- **MockMvc** tests use H2 with the `test` profile
-- **Testcontainers** PostgreSQL tests run when Docker is available
+- **Surefire** (`./mvnw test`): unit tests and H2 MockMvc tests (`test` profile)
+- **Failsafe** (part of `verify`): PostgreSQL Testcontainers tests (`*IT`) when Docker is available
+- GitHub Actions runs `./mvnw verify` on `ubuntu-latest` (Docker present), so Flyway migrations and Postgres integration tests execute in CI
+- If Docker is not running locally, the Postgres `*IT` classes are skipped rather than failed
+
+## Engineering / Reliability
+
+Finding updates use JPA optimistic locking (`@Version`) so two workflow operations on the same finding cannot silently overwrite each other. The loser is rejected with HTTP `409 Conflict`; the response does not expose Hibernate exception details.
+
+Duplicate detection is still “one canonical finding per asset + CVE”. Re-imports of an existing pair become `DUPLICATE` rows that point at the original. PostgreSQL enforces the canonical side with a partial unique index (`status <> 'DUPLICATE'`), so two concurrent imports cannot both insert `DETECTED`. Sequential re-imports still return `201` with `status=DUPLICATE`; a race that hits the index returns `409`.
+
+SLA, accepted-risk expiry, and overdue escalation use an injected `Clock` (`Clock.systemUTC()` in production) so boundary tests can freeze business time instead of depending on the machine date. A finding is overdue only when `dueDate` is **before** today; due today is not escalated.
+
+`GET /api/findings` is paginated:
+
+| Parameter | Default | Notes |
+|-----------|---------|--------|
+| `page` | `0` | Zero-based |
+| `size` | `20` | Requests larger than **100** are rejected with `400` (not silently clamped) |
+| `sort` | `id,asc` | Allowed: `id`, `dueDate`, `createdAt`, `updatedAt`, `severity`, `status`, `cvssScore`, `riskScore`, `cveId`, `title` |
+| `severity`, `status` | optional | Existing filters still apply |
+
+Response shape:
+
+```json
+{
+  "content": [],
+  "page": 0,
+  "size": 20,
+  "totalElements": 0,
+  "totalPages": 0,
+  "first": true,
+  "last": true
+}
+```
+
+Listing a page of findings loads `asset`, `scan`, `assignedEngineer`, and `duplicateOf` with fetch joins so the mapper does not issue one extra query per row. Measured on PostgreSQL for 20 findings across 20 assets: **22 SQL statements before the fetch-join, 3 after**.
+
+PostgreSQL also checks that `cvss_score` is between 0 and 10, and that an escalated finding has `escalated_at` set. These constraints back the same rules already validated in Java; they are not a second workflow engine.
 
 ## Demo accounts
 
@@ -206,10 +273,11 @@ curl -s http://localhost:8080/api/assets \
 - Only the assigned engineer can mark a finding as patched
 - A finding cannot be closed unless it was verified
 - Every status change creates a history record
-- Duplicate findings are detected by asset + CVE
+- Duplicate findings are detected by asset + CVE (at most one non-`DUPLICATE` row; PostgreSQL enforces this)
 - Overdue findings are automatically escalated
-- Accepted risk requires reason and expiration date
+- Accepted risk requires reason and expiration date at least one day ahead
 - Inactive assets cannot receive new findings
+- Concurrent workflow updates on the same finding version fail with `409`
 
 ## Tech stack
 
