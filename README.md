@@ -19,34 +19,24 @@ Personal portfolio project — domain inspired by how AppSec teams triage scan r
 - **MockMvc** and **Testcontainers** tests
 - **OpenAPI / Swagger UI** documentation (enabled on the `local` and `demo` profiles)
 
-## Live demo
-
-Public Swagger UI is the demo entrypoint (profile `demo` — not the local Docker secrets).
-
-**URL:** add this after the host has been up for a couple of days, pointing at `/swagger-ui.html`.
-
-Until then, local:
+## Demo
 
 ```bash
 docker compose up --build
 ```
 
-http://localhost:8081/swagger-ui.html — `/` redirects there when Swagger is enabled.
+- API: http://localhost:8081
+- Swagger UI: http://localhost:8081/swagger-ui.html
+- PostgreSQL: `localhost:5433`
 
-### Deploy (Railway)
+`/` redirects to Swagger. Logins:
 
-1. New project → deploy from `Nikkilodeonee/vulntrack` (Dockerfile).
-2. Add PostgreSQL. Railway sets `DATABASE_URL`; the app maps it to JDBC.
-3. Variables:
-
-| Variable | Value |
-|----------|--------|
-| `SPRING_PROFILES_ACTIVE` | `demo` |
-| `JWT_SECRET` | random string, **at least 32 characters** (not the Compose default) |
-
-Health check: `/actuator/health`. Root `/` opens Swagger.
-
-Demo logins stay as in [Demo accounts](#demo-accounts). This is a portfolio instance, not production.
+| User | Password | Role |
+|------|----------|------|
+| `admin` | `AdminSecret123` | ADMIN |
+| `analyst` | `AnalystSecret123` | SECURITY_ANALYST |
+| `engineer` | `EngineerSecret123` | ENGINEER |
+| `viewer` | `ViewerSecret123` | VIEWER |
 
 ## Architecture
 
@@ -161,31 +151,19 @@ All `/api/**` endpoints require `Authorization: Bearer <token>` except login.
 ### Prerequisites
 
 - JDK 17+
-- Docker (optional, for Compose and Testcontainers)
+- Docker (for Compose and Testcontainers)
 
-### Run with Docker Compose
+### Docker Compose
 
-```bash
-docker compose up --build
-```
-
-- API: http://localhost:8081
-- Swagger UI: http://localhost:8081/swagger-ui.html
-- PostgreSQL: localhost:5433
-
-### Run locally (recommended)
-
-**Option A — Docker (easiest, includes PostgreSQL):**
+Same command as [Demo](#demo):
 
 ```bash
 docker compose up --build
 ```
 
-API: http://localhost:8081/swagger-ui.html
+### Maven + PostgreSQL
 
-**Option B — Maven + PostgreSQL:**
-
-You need PostgreSQL running with database `vulntrack` / user `vulntrack` / password `vulntrack`.
+PostgreSQL must be running with database `vulntrack`, user `vulntrack`, password `vulntrack`.
 
 ```powershell
 .\mvnw install -DskipTests
@@ -194,9 +172,15 @@ java -jar web\target\web-1.0-SNAPSHOT.jar
 
 API: http://localhost:8080/swagger-ui.html
 
-> **Note:** In this multi-module project, use `install` then `java -jar` (or Docker).  
-> `spring-boot:run -pl web` alone fails because sibling modules are not in your local Maven cache yet.  
-> `spring-boot:run -pl web -am` can also fail on the parent POM — the `java -jar` approach above is the most reliable.
+In this multi-module project, use `install` then `java -jar`. `spring-boot:run -pl web` fails unless sibling modules are already in the local Maven cache.
+
+### Deploy on Railway
+
+1. New project → deploy from `Nikkilodeonee/vulntrack` (Dockerfile).
+2. Add PostgreSQL. Railway sets `DATABASE_URL`; the app maps it to JDBC.
+3. Set `SPRING_PROFILES_ACTIVE=demo` and `JWT_SECRET` (at least 32 characters; do not reuse the Compose default).
+
+Health check: `/actuator/health`. Root `/` opens Swagger. Demo accounts are the same as above.
 
 ### Build and test
 
@@ -246,7 +230,7 @@ PostgreSQL also checks that `cvss_score` is between 0 and 10, and that an escala
 
 ## Demo accounts
 
-Passwords are for local development only. Stored as BCrypt hashes; use plain-text values with login API.
+Passwords are for local and Railway demo use. Stored as BCrypt hashes; send the plain-text values to `POST /api/auth/login`.
 
 | User | Password | Role |
 |------|----------|------|
