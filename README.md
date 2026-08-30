@@ -1,6 +1,7 @@
 # VulnTrack — Vulnerability Remediation API
 
 [![Build and Test](https://github.com/Nikkilodeonee/vulntrack/actions/workflows/build.yml/badge.svg)](https://github.com/Nikkilodeonee/vulntrack/actions/workflows/build.yml)
+[![CodeQL](https://github.com/Nikkilodeonee/vulntrack/actions/workflows/codeql.yml/badge.svg)](https://github.com/Nikkilodeonee/vulntrack/actions/workflows/codeql.yml)
 
 **VulnTrack** is a Spring Boot backend for managing security vulnerabilities across company assets. It supports asset inventory, scan imports, CVSS-based risk scoring, remediation workflows, role-based access control, audit history, accepted-risk handling, SLA deadlines, and automated escalation.
 
@@ -15,7 +16,7 @@ Personal portfolio project — domain inspired by how AppSec teams triage scan r
 - **SLA deadlines** and hourly **overdue escalation** job
 - PostgreSQL + **Flyway** migrations
 - **Docker Compose** local environment
-- **GitHub Actions** CI
+- **GitHub Actions** CI with **CodeQL**
 - **MockMvc** and **Testcontainers** tests
 - **OpenAPI / Swagger UI** documentation (enabled on the `local` and `demo` profiles)
 
@@ -191,6 +192,7 @@ Health check: `/actuator/health`. Root `/` opens Swagger. Demo accounts are the 
 - **Surefire** (`./mvnw test`): unit tests and H2 MockMvc tests (`test` profile)
 - **Failsafe** (part of `verify`): PostgreSQL Testcontainers tests (`*IT`) when Docker is available
 - GitHub Actions runs `./mvnw verify` on `ubuntu-latest` (Docker present), so Flyway migrations and Postgres integration tests execute in CI
+- A separate **CodeQL** workflow scans Java on push, pull request, and a weekly schedule
 - If Docker is not running locally, the Postgres `*IT` classes are skipped rather than failed
 
 ## Engineering / Reliability
