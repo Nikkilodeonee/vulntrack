@@ -1,6 +1,7 @@
 package com.vulntrack.web;
 
 import com.vulntrack.service.AuthenticationException;
+import com.vulntrack.service.FindingConstraintViolations;
 import com.vulntrack.service.InvalidStateTransitionException;
 import com.vulntrack.service.ResourceConflictException;
 import jakarta.persistence.OptimisticLockException;
@@ -56,7 +57,7 @@ public class RestExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiErrorResponse handleDataIntegrity(DataIntegrityViolationException exception) {
-        if (containsConstraint(exception, "uq_finding_canonical_asset_cve")) {
+        if (FindingConstraintViolations.isCanonicalDuplicate(exception)) {
             return new ApiErrorResponse(
                     "CONFLICT",
                     "A finding for this asset and CVE already exists."
@@ -81,15 +82,4 @@ public class RestExceptionHandler {
         return new ApiErrorResponse("BAD_REQUEST", message);
     }
 
-    private static boolean containsConstraint(Throwable exception, String constraintName) {
-        Throwable current = exception;
-        while (current != null) {
-            String message = current.getMessage();
-            if (message != null && message.contains(constraintName)) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
-    }
 }

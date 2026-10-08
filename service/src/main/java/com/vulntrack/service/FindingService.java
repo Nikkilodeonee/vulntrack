@@ -114,8 +114,11 @@ public class FindingService {
         try {
             finding = findingRepository.saveAndFlush(finding);
         } catch (DataIntegrityViolationException exception) {
-            // The transaction is now rollback-only; convert the race into a 409 rather than a SQL error.
-            throw new ResourceConflictException("A finding for this asset and CVE already exists.");
+            if (FindingConstraintViolations.isCanonicalDuplicate(exception)) {
+                // The failed insert made the transaction rollback-only; report this specific race.
+                throw new ResourceConflictException("A finding for this asset and CVE already exists.", exception);
+            }
+            throw exception;
         }
         historyWriter.record(finding, null, FindingStatus.DETECTED, actor, "Finding imported from scan results.");
         return toFindingResponse(finding);

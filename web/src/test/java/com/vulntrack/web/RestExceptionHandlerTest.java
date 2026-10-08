@@ -1,6 +1,7 @@
 package com.vulntrack.web;
 
 import com.vulntrack.domain.Finding;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -9,6 +10,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.sql.SQLException;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -41,6 +44,21 @@ class RestExceptionHandlerTest {
                 .andExpect(jsonPath("$.message").value("A finding for this asset and CVE already exists."));
     }
 
+    @Test
+    void unrelatedConstraintFailureDoesNotClaimDuplicateOrExposeDatabaseDetails() throws Exception {
+        mockMvc.perform(get("/probe/check-constraint"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("CONFLICT"))
+                .andExpect(jsonPath("$.message").value("The request conflicts with existing resource state."));
+    }
+
+    @Test
+    void constraintNameInErrorTextDoesNotClaimDuplicate() throws Exception {
+        mockMvc.perform(get("/probe/constraint-text"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("The request conflicts with existing resource state."));
+    }
+
     @RestController
     static class ConflictProbeController {
 
@@ -52,8 +70,21 @@ class RestExceptionHandlerTest {
         @GetMapping("/probe/duplicate-index")
         void duplicateIndex() {
             throw new DataIntegrityViolationException(
-                    "ERROR: duplicate key value violates unique constraint \"uq_finding_canonical_asset_cve\""
+                    "insert failed", new ConstraintViolationException("database details",
+                    new SQLException("private database details", "23505"), "uq_finding_canonical_asset_cve")
             );
+        }
+
+        @GetMapping("/probe/check-constraint")
+        void checkConstraint() {
+            throw new DataIntegrityViolationException("private database details",
+                    new ConstraintViolationException("invalid CVSS",
+                            new SQLException("private database details", "23514"), "chk_finding_cvss_score"));
+        }
+
+        @GetMapping("/probe/constraint-text")
+        void constraintText() {
+            throw new DataIntegrityViolationException("private details mention uq_finding_canonical_asset_cve");
         }
     }
 }

@@ -22,7 +22,9 @@ public class OpenApiConfig {
                                 Vulnerability remediation workflow backend. Public portfolio demo: \
                                 viewer / ViewerSecret123. Use POST /api/auth/login, then Authorize with \
                                 the returned JWT. The demo profile allows viewing data and blocks writes, \
-                                including comments, for every account. Run locally to try remediation workflows.""")
+                                including comments, for every account. Findings are a historical snapshot; \
+                                dates stay fixed after initial seeding and scheduled escalation is disabled. \
+                                Run locally to try remediation workflows.""")
                         .version("1.0"))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH))
                 .components(new Components()

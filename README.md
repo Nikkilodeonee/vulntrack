@@ -11,7 +11,7 @@ Personal portfolio project — domain inspired by how AppSec teams triage scan r
 
 **Swagger UI:** [https://vulntrack-production-f727.up.railway.app/swagger-ui.html](https://vulntrack-production-f727.up.railway.app/swagger-ui.html)
 
-VulnTrack is deployed on Railway using Java 17, Spring Boot, and PostgreSQL.
+VulnTrack is deployed on Railway using Java 17, Spring Boot, and PostgreSQL 18.6.
 
 Explore the API through interactive OpenAPI documentation.
 
@@ -23,6 +23,8 @@ Explore the API through interactive OpenAPI documentation.
 Log in through `POST /api/auth/login`, then use **Authorize** with the returned token. All accounts are read-only on this public instance.
 
 The application uses a disposable demonstration database containing fictional security assets and findings.
+
+These findings are a historical snapshot of a fictional remediation exercise. Dates are fixed when the demo database is first seeded; they are not rolling deadlines. Scheduled escalation is disabled in the public demo, so an old deadline does not indicate a live, unattended vulnerability.
 
 Source code, architecture, tests, and local setup instructions are available below.
 
@@ -177,7 +179,7 @@ All `/api/**` endpoints require `Authorization: Bearer <token>` except login.
 
 ### Docker Compose
 
-Same command as [Demo](#demo):
+Same command as [Local Demo](#local-demo):
 
 ```bash
 docker compose up --build
@@ -213,7 +215,9 @@ Generate the secret with `openssl rand -hex 32`, or a cryptographically secure p
 4. In the application service's deployment settings, set Healthcheck Path to `/actuator/health` and timeout to 300 seconds. Apply the variables and deploy. Railway detects the root Dockerfile. Keep the build root at the repository root so Maven can build all four modules. The app listens on Railway's `PORT` automatically.
 5. When the deployment is healthy, open Settings → Networking → Generate Domain. Open `/swagger-ui.html` on that HTTPS domain; `/` also redirects to Swagger.
 
-The public `demo` profile blocks API writes for **every role**, including comments, while allowing login and authenticated reads. Use `viewer` / `ViewerSecret123`, copy the token from `POST /api/auth/login`, then click **Authorize** in Swagger. Explore assets, findings, audit history and the risk summary. The demo profile adds four synthetic findings with remediation history in a separate Flyway migration location and disables scheduled escalation so the examples remain stable. Use a separate, disposable database for this profile; run Docker Compose with `local` to exercise write workflows.
+The public `demo` profile blocks API writes for **every role**, including comments, while allowing login and authenticated reads. Use `viewer` / `ViewerSecret123`, copy the token from `POST /api/auth/login`, then click **Authorize** in Swagger. Explore assets, findings, audit history and the risk summary. The demo profile adds four synthetic findings with remediation history in a separate Flyway migration location. It intentionally preserves that historical snapshot and disables scheduled escalation. Flyway evaluates `CURRENT_DATE` and `CURRENT_TIMESTAMP` once when seeding the database; restarting or redeploying does not refresh them. There is no periodic reset. Use a separate, disposable database for this profile; run Docker Compose with `local` to exercise write workflows.
+
+The live Railway database currently runs PostgreSQL **18.6**; Docker Compose and the main integration suite use **16**, while the demo integration tests run on **18**. Flyway core and its PostgreSQL module are pinned together to **11.20.0**, whose [PostgreSQL implementation recognizes version 18](https://github.com/flyway/flyway/blob/flyway-11.20.0/flyway-database/flyway-database-postgresql/src/main/java/org/flywaydb/database/postgresql/PostgreSQLDatabase.java).
 
 Railway bills for application and database resources. Check usage and spending limits; the included plan credit may not cover continuous operation of both services.
 
@@ -306,8 +310,8 @@ curl -s http://localhost:8080/api/assets \
 | Java | 17 |
 | Spring Boot | 3.4.13 |
 | Spring Security + JWT | jjwt 0.12.6 |
-| PostgreSQL | 16 |
-| Flyway | managed by Spring Boot |
+| PostgreSQL | 18.6 on Railway; 16 in Docker Compose; CI covers 16 and 18 |
+| Flyway | 11.20.0 (core and PostgreSQL module) |
 | Testcontainers | 1.20.4 |
 | springdoc-openapi | 2.8.6 |
 

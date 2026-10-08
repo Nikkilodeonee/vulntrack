@@ -28,6 +28,8 @@
         <testcontainers.version>1.20.4</testcontainers.version>
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.8.6</springdoc.version>
+        <!-- PostgreSQL 18 support; keep core and the PostgreSQL module on the same version. -->
+        <flyway.version>11.20.0</flyway.version>
     </properties>
 
     <dependencyManagement>
