@@ -2,9 +2,16 @@ package com.vulntrack;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -18,8 +25,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("demo")
 @Testcontainers(disabledWithoutDocker = true)
@@ -42,6 +50,24 @@ class DemoPostgresIT {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private TestRestTemplate restTemplate;
+
+    @ParameterizedTest
+    @CsvSource({"admin,AdminSecret123", "viewer,ViewerSecret123"})
+    void embeddedServerPreservesForbiddenResponse(String username, String password) throws Exception {
+        var login = restTemplate.postForEntity("/api/auth/login",
+                java.util.Map.of("username", username, "password", password), String.class);
+        assertEquals(HttpStatus.OK, login.getStatusCode());
+        var headers = new HttpHeaders();
+        headers.setBearerAuth(objectMapper.readTree(login.getBody()).get("token").asText());
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        var response = restTemplate.exchange("/api/assets", HttpMethod.POST,
+                new HttpEntity<>(java.util.Map.of(), headers), String.class);
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals("FORBIDDEN", objectMapper.readTree(response.getBody()).get("error").asText());
+    }
 
     @Test
     void demoProfileMigratesPortfolioExamplesAndServesThemReadOnly() throws Exception {

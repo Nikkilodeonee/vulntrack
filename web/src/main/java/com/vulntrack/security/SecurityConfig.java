@@ -18,17 +18,20 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint authenticationEntryPoint;
+    private final JwtAccessDeniedHandler accessDeniedHandler;
     private final boolean openApiEnabled;
     private final boolean demoReadOnly;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
             JwtAuthenticationEntryPoint authenticationEntryPoint,
+            JwtAccessDeniedHandler accessDeniedHandler,
             @Value("${springdoc.api-docs.enabled:false}") boolean openApiEnabled,
             @Value("${vulntrack.demo.read-only:false}") boolean demoReadOnly
     ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.authenticationEntryPoint = authenticationEntryPoint;
+        this.accessDeniedHandler = accessDeniedHandler;
         this.openApiEnabled = openApiEnabled;
         this.demoReadOnly = demoReadOnly;
     }
@@ -39,7 +42,8 @@ public class SecurityConfig {
                 // Stateless JWT API: clients send Authorization headers, not session cookies.
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(handler -> handler.authenticationEntryPoint(authenticationEntryPoint))
+                .exceptionHandling(handler -> handler.authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers("/api/auth/login").permitAll()
                             .requestMatchers("/actuator/health", "/actuator/info").permitAll();

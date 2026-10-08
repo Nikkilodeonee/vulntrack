@@ -22,6 +22,10 @@ Personal portfolio project — domain inspired by how AppSec teams triage scan r
 
 ## Demo
 
+**[Open the live Swagger demo](https://vulntrack-production-f727.up.railway.app/)** — hosted on Railway with synthetic findings, audit history, and dashboard summaries. Log in through `POST /api/auth/login` as `viewer` / `ViewerSecret123`, then use **Authorize** with the returned token. All accounts are read-only on this public instance.
+
+Run locally to try the full remediation workflow:
+
 ```bash
 docker compose up --build
 ```
