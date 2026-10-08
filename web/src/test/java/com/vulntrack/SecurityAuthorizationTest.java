@@ -138,6 +138,12 @@ class SecurityAuthorizationTest {
         mockMvc.perform(patch("/api/findings/" + findingId + "/confirm")
                         .header("Authorization", "Bearer " + viewerToken))
                 .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/findings/" + findingId + "/comments")
+                        .header("Authorization", "Bearer " + viewerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"Viewer should not be able to write.\"}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

@@ -18,7 +18,11 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("VulnTrack API")
-                        .description("Vulnerability remediation workflow backend")
+                        .description("""
+                                Vulnerability remediation workflow backend. Public portfolio demo: \
+                                viewer / ViewerSecret123. Use POST /api/auth/login, then Authorize with \
+                                the returned JWT. The demo profile allows viewing data and blocks writes, \
+                                including comments, for every account. Run locally to try remediation workflows.""")
                         .version("1.0"))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH))
                 .components(new Components()

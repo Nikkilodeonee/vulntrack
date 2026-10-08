@@ -1,0 +1,7 @@
+.git
+.idea
+**/target
+*.iml
+.env
+.env.*
+artifacts

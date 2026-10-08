@@ -178,10 +178,23 @@ In this multi-module project, use `install` then `java -jar`. `spring-boot:run -
 ### Deploy on Railway
 
 1. New project → deploy from `Nikkilodeonee/vulntrack` (Dockerfile).
-2. Add PostgreSQL. Railway sets `DATABASE_URL`; the app maps it to JDBC.
-3. Set `SPRING_PROFILES_ACTIVE=demo` and `JWT_SECRET` (at least 32 characters; do not reuse the Compose default).
+2. Add PostgreSQL in the same project. Keep the database private.
+3. In the **VulnTrack application service**, add these variables (assuming the database service is named `Postgres`):
 
-Health check: `/actuator/health`. Root `/` opens Swagger. Demo accounts are the same as above.
+```dotenv
+SPRING_PROFILES_ACTIVE=demo
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+JWT_SECRET=<a private randomly generated secret of at least 32 bytes>
+```
+
+Generate the secret with `openssl rand -hex 32`, or a cryptographically secure password generator. Store the value only in Railway. Adding PostgreSQL creates variables on the database service; the application needs the reference above. The app converts its PostgreSQL URL to JDBC, including encoded credentials. Alternatively, set `SPRING_DATASOURCE_URL` (a JDBC URL), `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD` explicitly.
+
+4. In the application service's deployment settings, set Healthcheck Path to `/actuator/health` and timeout to 300 seconds. Apply the variables and deploy. Railway detects the root Dockerfile. Keep the build root at the repository root so Maven can build all four modules. The app listens on Railway's `PORT` automatically.
+5. When the deployment is healthy, open Settings → Networking → Generate Domain. Open `/swagger-ui.html` on that HTTPS domain; `/` also redirects to Swagger.
+
+The public `demo` profile blocks API writes for **every role**, including comments, while allowing login and authenticated reads. Use `viewer` / `ViewerSecret123`, copy the token from `POST /api/auth/login`, then click **Authorize** in Swagger. Explore assets, findings, audit history and the risk summary. The demo profile adds four synthetic findings with remediation history in a separate Flyway migration location and disables scheduled escalation so the examples remain stable. Use a separate, disposable database for this profile; run Docker Compose with `local` to exercise write workflows.
+
+Railway bills for application and database resources. Check usage and spending limits; the included plan credit may not cover continuous operation of both services.
 
 ### Build and test
 
@@ -232,7 +245,7 @@ PostgreSQL also checks that `cvss_score` is between 0 and 10, and that an escala
 
 ## Demo accounts
 
-Passwords are for local and Railway demo use. Stored as BCrypt hashes; send the plain-text values to `POST /api/auth/login`.
+These accounts are seeded with BCrypt password hashes. Send the plain-text values to `POST /api/auth/login`. The public Railway demo uses the viewer account; the `demo` profile rejects writes even when an administrator signs in. The `local` profile supports the full workflows, and VIEWER cannot add comments.
 
 | User | Password | Role |
 |------|----------|------|

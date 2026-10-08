@@ -19,15 +19,18 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint authenticationEntryPoint;
     private final boolean openApiEnabled;
+    private final boolean demoReadOnly;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
             JwtAuthenticationEntryPoint authenticationEntryPoint,
-            @Value("${springdoc.api-docs.enabled:false}") boolean openApiEnabled
+            @Value("${springdoc.api-docs.enabled:false}") boolean openApiEnabled,
+            @Value("${vulntrack.demo.read-only:false}") boolean demoReadOnly
     ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.authenticationEntryPoint = authenticationEntryPoint;
         this.openApiEnabled = openApiEnabled;
+        this.demoReadOnly = demoReadOnly;
     }
 
     @Bean
@@ -43,11 +46,18 @@ public class SecurityConfig {
 
                     if (openApiEnabled) {
                         auth.requestMatchers(
+                                "/",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs",
                                 "/v3/api-docs/**"
                         ).permitAll();
+                    }
+
+                    if (demoReadOnly) {
+                        auth.requestMatchers(HttpMethod.GET, "/api/**").authenticated()
+                                .requestMatchers("/api/**").denyAll();
+                        return;
                     }
 
                     auth.requestMatchers(HttpMethod.POST, "/api/assets").hasAnyRole("ADMIN", "SECURITY_ANALYST")
@@ -57,7 +67,9 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.PATCH, "/api/findings/**").hasAnyRole(
                                     "ADMIN", "SECURITY_ANALYST", "ENGINEER"
                             )
-                            .requestMatchers(HttpMethod.POST, "/api/findings/*/comments").authenticated()
+                            .requestMatchers(HttpMethod.POST, "/api/findings/*/comments").hasAnyRole(
+                                    "ADMIN", "SECURITY_ANALYST", "ENGINEER"
+                            )
                             .requestMatchers("/api/**").authenticated()
                             .anyRequest().denyAll();
                 })
