@@ -7,6 +7,25 @@
 
 Personal portfolio project — domain inspired by how AppSec teams triage scan results after security assessments.
 
+## Live Demo
+
+**Swagger UI:** [https://vulntrack-production-f727.up.railway.app/swagger-ui.html](https://vulntrack-production-f727.up.railway.app/swagger-ui.html)
+
+VulnTrack is deployed on Railway using Java 17, Spring Boot, and PostgreSQL.
+
+Explore the API through interactive OpenAPI documentation.
+
+**Read-only demo credentials:**
+
+- Username: `viewer`
+- Password: `ViewerSecret123`
+
+Log in through `POST /api/auth/login`, then use **Authorize** with the returned token. All accounts are read-only on this public instance.
+
+The application uses a disposable demonstration database containing fictional security assets and findings.
+
+Source code, architecture, tests, and local setup instructions are available below.
+
 ## Highlights
 
 - Production-style **multi-module** Spring Boot REST API
@@ -20,9 +39,7 @@ Personal portfolio project — domain inspired by how AppSec teams triage scan r
 - **MockMvc** and **Testcontainers** tests
 - **OpenAPI / Swagger UI** documentation (enabled on the `local` and `demo` profiles)
 
-## Demo
-
-**[Open the live Swagger demo](https://vulntrack-production-f727.up.railway.app/)** — hosted on Railway with synthetic findings, audit history, and dashboard summaries. Log in through `POST /api/auth/login` as `viewer` / `ViewerSecret123`, then use **Authorize** with the returned token. All accounts are read-only on this public instance.
+## Local Demo
 
 Run locally to try the full remediation workflow:
 
