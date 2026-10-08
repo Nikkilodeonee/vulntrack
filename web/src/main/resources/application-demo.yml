@@ -1,4 +1,7 @@
 # Public portfolio instance. Swagger is on; JWT secret and DB must come from the host.
+server:
+  forward-headers-strategy: framework
+
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL}

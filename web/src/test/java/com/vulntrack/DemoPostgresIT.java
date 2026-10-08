@@ -26,6 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
@@ -53,6 +54,17 @@ class DemoPostgresIT {
 
     @Autowired
     private TestRestTemplate restTemplate;
+
+    @Test
+    void openApiUsesHttpsFromTheDeploymentProxy() throws Exception {
+        var headers = new HttpHeaders();
+        headers.set("X-Forwarded-Proto", "https");
+        var response = restTemplate.exchange("/v3/api-docs", HttpMethod.GET,
+                new HttpEntity<>(headers), String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertTrue(objectMapper.readTree(response.getBody()).get("servers").get(0)
+                .get("url").asText().startsWith("https://"));
+    }
 
     @ParameterizedTest
     @CsvSource({"admin,AdminSecret123", "viewer,ViewerSecret123"})
