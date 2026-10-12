@@ -7,26 +7,71 @@
 
 Personal portfolio project — domain inspired by how AppSec teams triage scan results after security assessments.
 
+## Why this project matters
+
+- **Turns scan results into accountable remediation:** asset-aware risk scoring, assigned owners, SLA deadlines, and role-controlled transitions from detection to closure, with an audit trail of who changed what and when.
+- **Handles concurrent work safely:** optimistic locking rejects stale updates with `409 Conflict`; a PostgreSQL partial unique index prevents competing imports from creating two canonical findings for the same asset + CVE.
+- **Makes performance measurable:** fetch joins reduced a 20-finding list from **22 SQL statements to 3** on PostgreSQL, with a [query-count integration test](web/src/test/java/com/vulntrack/FindingListQueryIT.java) guarding against regression.
+
+[Engineering details](#engineering--reliability) · [Workflow rules](#business-rules) · [Build and test](#build-and-test)
+
+## Architecture at a glance
+
+```mermaid
+flowchart LR
+    client["Swagger UI / API client"] --> web["web: JWT security + REST controllers"]
+    web --> service["service: risk scoring + remediation + audit"]
+    service --> persistence["persistence: JPA entities + repositories"]
+    persistence --> db[(PostgreSQL)]
+    api["api: shared DTOs + enums"] -.-> web
+    api -.-> service
+    api -.-> persistence
+```
+
+Four Maven modules separate HTTP/security, application logic, persistence, and shared contracts. [Module and service responsibilities](#architecture).
+
 ## Live Demo
 
 **Swagger UI:** [https://vulntrack-production-f727.up.railway.app/swagger-ui.html](https://vulntrack-production-f727.up.railway.app/swagger-ui.html)
 
-VulnTrack is deployed on Railway using Java 17, Spring Boot, and PostgreSQL 18.6.
+### Try it in 60 seconds: login → finding → audit history
 
-Explore the API through interactive OpenAPI documentation.
+In Swagger, expand each endpoint and click **Try it out**, then **Execute**:
 
-**Read-only demo credentials:**
+1. **Log in:** `POST /api/auth/login` with this request body:
 
-- Username: `viewer`
-- Password: `ViewerSecret123`
+   ```json
+   {"username":"viewer","password":"ViewerSecret123"}
+   ```
 
-Log in through `POST /api/auth/login`, then use **Authorize** with the returned token. All accounts are read-only on this public instance.
+   Copy the response's `token`, click **Authorize**, and paste the token into `bearerAuth` (Swagger adds the `Bearer` prefix).
 
-The application uses a disposable demonstration database containing fictional security assets and findings.
+2. **Inspect a finding:** `GET /api/findings` with `status=IN_PROGRESS`. In `content`, look for `CVE-DEMO-0002` and copy its `id`. Selected fields from this seeded finding:
 
-These findings are a historical snapshot of a fictional remediation exercise. Dates are fixed when the demo database is first seeded; they are not rolling deadlines. Scheduled escalation is disabled in the public demo, so an old deadline does not indicate a live, unattended vulnerability.
+   ```json
+   {
+     "cveId": "CVE-DEMO-0002",
+     "title": "Demo: missing authorization check in legacy portal",
+     "assetName": "legacy-portal",
+     "cvssScore": 6.4,
+     "riskScore": 7.68,
+     "status": "IN_PROGRESS",
+     "assignedEngineerUsername": "engineer"
+   }
+   ```
 
-Source code, architecture, tests, and local setup instructions are available below.
+3. **Trace its history:** `GET /api/findings/{id}/history`, using the `id` from step 2. Each entry includes `fromStatus`, `toStatus`, `changedByUsername`, `changedByRole`, `changedAt`, and `note`. This finding's history shows:
+
+   | From | To | Changed by |
+   |------|----|------------|
+   | `null` (import) | `DETECTED` | `analyst` |
+   | `DETECTED` | `CONFIRMED` | `analyst` |
+   | `CONFIRMED` | `ASSIGNED` | `admin` |
+   | `ASSIGNED` | `IN_PROGRESS` | `engineer` |
+
+The public instance is **read-only for every account** and contains fictional assets and findings. Run the [local demo](#local-demo) to create findings and perform workflow transitions.
+
+VulnTrack is deployed on Railway using Java 17, Spring Boot, and PostgreSQL 18.6. The demo is a historical snapshot: dates stay fixed after initial seeding and scheduled escalation is disabled.
 
 ## Highlights
 
@@ -83,12 +128,7 @@ Application services in `service`:
 | `AuthService` / `JwtTokenService` | Login and JWT |
 | `RiskScoringService` | CVSS × criticality scoring |
 
-```
-Client → Controller → FindingWorkflowService → Repositories + FindingHistoryWriter
-                   ↘ FindingService / AssetService / ScanService / DashboardService
-Scheduler ─────────→ FindingWorkflowService (SLA escalation)
-Flyway ────────────────────────────────────────────────→ PostgreSQL
-```
+The [architecture diagram above](#architecture-at-a-glance) shows the request path. The hourly scheduler calls `FindingWorkflowService` for SLA escalation; Flyway manages the PostgreSQL schema. Scheduled escalation is disabled in the public demo.
 
 ## Finding workflow
 
